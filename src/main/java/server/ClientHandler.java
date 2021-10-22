@@ -6,6 +6,8 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ClientHandler {
     Socket socket;
@@ -24,13 +26,14 @@ public class ClientHandler {
 
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
-            new Thread(() -> {
+
+            ExecutorService executorService = Executors.newCachedThreadPool();
+            executorService.execute(() -> {
                 try {
-                    socket.setSoTimeout(120000);
+                    //socket.setSoTimeout(0);
                     // цикл аутентификации
                     while (true) {
                         String str = in.readUTF();
-
                         if (str.equals("/end")) {
                             sendMsg("/end");
                             System.out.println("Client disconnected");
@@ -46,6 +49,9 @@ public class ClientHandler {
                                     sendMsg("/authok " + nickname);
                                     server.subscribe(this);
                                     authenticated = true;
+                                    //==============//
+//                                    sendMsg(SQLHandler.getMessageForNick(nickname));
+                                    //==============//
                                     break;
                                 } else {
                                     sendMsg("С этим логином уже вошли");
@@ -70,7 +76,6 @@ public class ClientHandler {
                             }
                         }
                     }
-                    socket.setSoTimeout(0);
                     // цикл работы
                     while (authenticated) {
                         String str = in.readUTF();
@@ -89,29 +94,47 @@ public class ClientHandler {
                                 }
                                 server.privateMsg(this, token[1], token[2]);
                             }
+                            //==============//
+                            if (str.startsWith("/chnick ")) {
+                                String[] token = str.split("\\s+", 2);
+                                if (token.length < 2) {
+                                    continue;
+                                }
+                                if (token[1].contains(" ")) {
+                                    sendMsg("Ник не может содержать пробелов");
+                                    continue;
+                                }
+                                if (server.getAuthService().changeNick(this.nickname, token[1])) {
+                                    sendMsg("/yournickis " + token[1]);
+                                    sendMsg("Ваш ник изменен на " + token[1]);
+                                    this.nickname = token[1];
+                                    server.broadcastClientList();
+                                } else {
+                                    sendMsg("Не удалось изменить ник. Ник " + token[1] + " уже существует");
+                                }
+                            }
+                            //==============//
                         } else {
                             server.broadcastMsg(this, str);
                         }
                     }
                     // SocketTimeoutException
                 } catch (IOException e) {
-                    //e.printStackTrace();
-                    sendMsg("/end");
-                    System.out.println("Client disconnected");
+                    e.printStackTrace();
                 } finally {
                     server.unsubscribe(this);
+                    executorService.shutdown();
                     try {
                         socket.close();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
                 }
-            }).start();
+            });
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-
     public void sendMsg(String msg) {
         try {
             out.writeUTF(msg);
@@ -119,11 +142,9 @@ public class ClientHandler {
             e.printStackTrace();
         }
     }
-
     public String getNickname() {
         return nickname;
     }
-
     public String getLogin() {
         return login;
     }

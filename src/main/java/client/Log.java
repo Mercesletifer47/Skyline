@@ -1,4 +1,5 @@
 package client;
+
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -6,11 +7,14 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+
 public class Log {
     private static PrintWriter out;
+
     private static String getLogFileByLogin(String login) {
         return "log/log_" + login + ".txt";
     }
+
     public static void startLog(String login) {
         try {
             out = new PrintWriter(new FileOutputStream(getLogFileByLogin(login), true), true);
